@@ -6,6 +6,8 @@ from config import Config
 from flask_migrate import Migrate
 from models import Template, Generation, Question
 from dotenv import load_dotenv
+from datetime import datetime
+from utils import generate_gpt_response
 
 import os
 
@@ -99,52 +101,57 @@ def list_templates():
     return jsonify(templates_list), 200
 
 
-# @app.route('/api/create-template', methods=['POST'])
-# def create_template_api():
+@app.route('/api/generation_api', methods=['POST'])
+def generation_api():
     # Get the request data
     data = request.json
 
     # Extract template details from the request
-    template_str = data.get('template_str')
     template_id = data.get('template_id')
+    
+    # Fetch the template_str (prompt_text) from the Template table using the template_id
+    template = Template.query.get_or_404(template_id)
+    prompt_text = template.template_str
+    print(f"Prompt text: {prompt_text}")  # Add this line to print the prompt_text)
+
+    # Extract course and assignment details from the request
     course = data.get('course')
-    section_info = data.get('section')  
-    num_questions = data.get('num_questions')
-    sample_question = data.get('sample_question')
-    concepts = data.get('concepts')
+    
+    # Extract the assignment object, which should be a dictionary containing "course", "section", "num_questions", etc.
+    assignment = data.get('assignment')
+    
+    # Get section content based on the archive and filepath provided in the assignment
+    section_content = get_stex_content(assignment['section']['archive'], assignment['section']['filepath'])
+    
+    # Replace placeholders in prompt_text with corresponding values from the assignment
+    final_prompt = prompt_text.format(
+        course=course,
+        section=section_content,  
+        num_questions=assignment.get('num_questions'),
+        sample_question=assignment.get('sample_question'),
+        concepts=assignment.get('concepts')
+    )
 
-    # Validate that required fields are provided
-    if not template_str:
-        return jsonify({"error": "Template string must be provided"}), 400
+    # Generate GPT response using the final prompt
+    gpt_response = generate_gpt_response(final_prompt)
 
-    if not section_info or 'archive' not in section_info or 'filepath' not in section_info:
-        return jsonify({"error": "Section information (archive and filepath) must be provided"}), 400
+    # Add the generation to the database
+    generation = Generation(
+        template_id=template_id,
+        prompt_text=prompt_text,
+        assignment=assignment,  # Store the assignment as a JSON object in the database
+        gpt_response=gpt_response,
+        created_at=datetime.utcnow()
+    )
 
-    # Fetch the course content using the archive and filepath
-    try:
-        section_content = get_stex_content(section_info['archive'], section_info['filepath'])
-   
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    db.session.add(generation)
+    db.session.commit()
 
-    # Populate the template with the provided values
-    try:
-        populated_template = template_str.format(
-            course=course,
-            section=section_content,  
-            num_questions=num_questions,
-            sample_question=sample_question,
-            concepts=concepts
-        )
-    except KeyError as e:
-        return jsonify({"error": f"Missing placeholder: {str(e)}"}), 400
-
-    # Return the populated template in the response
-    response = {
-        "TemplateId": template_id,
-        "PopulatedTemplate": populated_template
-    }
-    return jsonify(response)
+    # Return the GPT response and a success message in JSON format
+    return jsonify({
+        "message": "Generation created successfully",
+        "gpt_response": gpt_response
+    }), 201
 
 
 if __name__ == '__main__':

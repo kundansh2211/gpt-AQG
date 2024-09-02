@@ -14,3 +14,9 @@ Ensure you have the following software installed:
 ### Installation
 
 - pip install -r requirements.txt
+
+### For table Creation in DB
+Following are the commands to migrate:
+`flask db init`: Initializes the migration environment. Need to fire only once.
+`flask db migrate`: Generates a new migration script based on the changes detected in your models.
+`flask db upgrade`: Applies the migration to your database .
