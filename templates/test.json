@@ -1,0 +1,21 @@
+{
+    "version": "0",
+    "updateMessage": "Test for URL fetch",
+    "templateName": "test",
+    "templateStrs": [
+        "You are a teaching assistant who creates questions from a given piece of course material. ",
+        "Create 3 questions for the concept %%CONCEPT%% from the following:\n\n%%FETCH_URL1%%"
+    ],
+    "defaultAssignment": [
+        {
+            "key": "CONCEPT",
+            "value": "Apple"
+        },
+        {
+            "key": "FETCH_URL1",
+            "value": "https://gist.githubusercontent.com/abchugh/7e6681d9f859daf89edb8b4dc37d1761/raw/005d76e149e3cd06220c899b011f77aff31c878d/gistfile1.txt"
+        }
+    ],
+    "updater": "Abhishek Chugh (ym23eqaw)",
+    "updateTime": "2023-12-29T16:48:14.838407"
+}

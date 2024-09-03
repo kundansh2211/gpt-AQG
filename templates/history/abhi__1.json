@@ -1,0 +1,11 @@
+{
+    "version": "1",
+    "updateMessage": "updatedText",
+    "templateName": "abhi",
+    "templateStrs": [
+        "What is programming? \nExplain with examples in python"
+    ],
+    "defaultAssignment": [],
+    "updater": "Fake User: fake_joy  (fake_joy)",
+    "updateTime": "2024-08-27T12:22:08.258113"
+}

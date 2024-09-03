@@ -1,0 +1,1 @@
+This is where information about history of templates (Create questions request) are stored.

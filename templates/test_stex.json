@@ -1,0 +1,20 @@
+{
+    "version": "0",
+    "updateMessage": "Test for recursive stex fetch",
+    "templateName": "test_stex",
+    "templateStrs": [
+        "You are a teaching assistant who creates questions from a given piece of course material. Create 3 questions for the concept %%CONCEPT%% from the following:\n\n%%SECTION_STEX1%%"
+    ],
+    "defaultAssignment": [
+        {
+            "key": "CONCEPT",
+            "value": "artifical intelligence"
+        },
+        {
+            "key": "SECTION_STEX1",
+            "value": "MiKoMH/AI||intro/sec/whatisai.en.tex"
+        }
+    ],
+    "updater": "Abhishek Chugh (ym23eqaw)",
+    "updateTime": "2023-12-29T16:48:14.838407"
+}

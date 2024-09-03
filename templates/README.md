@@ -1,0 +1,1 @@
+This is where templates are stored.
