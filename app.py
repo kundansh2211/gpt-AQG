@@ -7,7 +7,7 @@ from flask_migrate import Migrate
 from models import Template, Generation, Question
 from dotenv import load_dotenv
 from datetime import datetime
-from utils import generate_gpt_response
+from utils import generate_gpt_response, replace_placeholders
 import os
 
 app = Flask(__name__)
@@ -108,16 +108,11 @@ def generation_api():
     prompt_text = template.template_str
 
     # print(f"Prompt text: {prompt_text}")  
-    course = data.get('course')
+    # course = data.get('course')
     assignment = data.get('assignment')
-    section_content = get_stex_content(assignment['section']['archive'], assignment['section']['filepath'])
-    final_prompt = prompt_text.format(
-        course=course,
-        section=section_content,  
-        num_questions=assignment.get('num_questions'),
-        sample_question=assignment.get('sample_question'),
-        concepts=assignment.get('concepts')
-    )
+    # section_content = get_stex_content(assignment['section']['archive'], assignment['section']['filepath'])
+    final_prompt = replace_placeholders(prompt_text, assignment)
+    print("Final prompt sent to GPT: ", final_prompt)
     gpt_response = generate_gpt_response(final_prompt)
     generation = Generation(
         template_id=template_id,

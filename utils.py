@@ -2,6 +2,7 @@ import openai
 from dotenv import load_dotenv
 import os
 from openai import OpenAI
+from fetchers import get_stex_content
 
 load_dotenv()
 
@@ -22,3 +23,19 @@ def generate_gpt_response(final_prompt):
     
     return message
 
+def replace_placeholders(template_str, assignment):
+    # Replace placeholders with actual values from the assignment dictionary
+    final_prompt = template_str.replace("%%course%%", assignment.get("course", ""))
+    
+    # Correcting the section content replacement
+    section_content = get_stex_content(
+        assignment['section']['archive'], 
+        assignment['section']['filepath']
+    )
+    final_prompt = final_prompt.replace("%%section%%", section_content)
+    
+    final_prompt = final_prompt.replace("%%num_questions%%", str(assignment.get("num_questions", "")))
+    final_prompt = final_prompt.replace("%%sample_question%%", assignment.get("sample_question", ""))
+    final_prompt = final_prompt.replace("%%concepts%%", ", ".join(assignment.get("concepts", [])))
+    
+    return final_prompt

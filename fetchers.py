@@ -60,6 +60,7 @@ def clear_cache():
 
 def get_raw_stex_url(archive: str, filename: str):
     return f"https://gl.mathhub.info/{archive}/-/raw/main/source/{filename}"
+# https://gl.mathhub.info/courses/jacobs/GenICT/course/-/blob/main/source/python/slides/strings.en.tex
 
 def get_raw_stex(archive: str, filename: str):
     url = get_raw_stex_url(archive, filename)
