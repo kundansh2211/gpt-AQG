@@ -8,7 +8,6 @@ from models import Template, Generation, Question
 from dotenv import load_dotenv
 from datetime import datetime
 from utils import generate_gpt_response
-
 import os
 
 app = Flask(__name__)
@@ -103,27 +102,15 @@ def list_templates():
 
 @app.route('/api/generation_api', methods=['POST'])
 def generation_api():
-    # Get the request data
     data = request.json
-
-    # Extract template details from the request
     template_id = data.get('template_id')
-    
-    # Fetch the template_str (prompt_text) from the Template table using the template_id
     template = Template.query.get_or_404(template_id)
     prompt_text = template.template_str
-    print(f"Prompt text: {prompt_text}")  # Add this line to print the prompt_text)
 
-    # Extract course and assignment details from the request
+    # print(f"Prompt text: {prompt_text}")  
     course = data.get('course')
-    
-    # Extract the assignment object, which should be a dictionary containing "course", "section", "num_questions", etc.
     assignment = data.get('assignment')
-    
-    # Get section content based on the archive and filepath provided in the assignment
     section_content = get_stex_content(assignment['section']['archive'], assignment['section']['filepath'])
-    
-    # Replace placeholders in prompt_text with corresponding values from the assignment
     final_prompt = prompt_text.format(
         course=course,
         section=section_content,  
@@ -131,23 +118,17 @@ def generation_api():
         sample_question=assignment.get('sample_question'),
         concepts=assignment.get('concepts')
     )
-
-    # Generate GPT response using the final prompt
     gpt_response = generate_gpt_response(final_prompt)
-
-    # Add the generation to the database
     generation = Generation(
         template_id=template_id,
         prompt_text=prompt_text,
-        assignment=assignment,  # Store the assignment as a JSON object in the database
+        assignment=assignment,  
         gpt_response=gpt_response,
         created_at=datetime.utcnow()
     )
 
     db.session.add(generation)
     db.session.commit()
-
-    # Return the GPT response and a success message in JSON format
     return jsonify({
         "message": "Generation created successfully",
         "gpt_response": gpt_response
