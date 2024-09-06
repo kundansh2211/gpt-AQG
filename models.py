@@ -4,8 +4,8 @@ from datetime import datetime
 class Template(db.Model):
     __tablename__ = 'template'
 
-    template_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    template_type = db.Column(db.Enum(
+    templateId = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    templateType = db.Column(db.Enum(
         'CONTEXT_BASED', 
         'FROM_SAMPLE_PROBLEM', 
         'FROM_MORE_EXAMPLES', 
@@ -14,49 +14,58 @@ class Template(db.Model):
         'FIX_REFERENCES', 
         'FIX_DISTRACTORS'
     ), nullable=False)
-    template_name = db.Column(db.String(255), nullable=False)
-    template_version = db.Column(db.Integer, nullable=False)
-    default_assignments = db.Column(db.JSON)
-    template_str = db.Column(db.Text)
-    update_message = db.Column(db.Text)
+    templateName = db.Column(db.String(255), nullable=False)
+    templateVersion = db.Column(db.Integer, nullable=False)
+    defaultAssignments = db.Column(db.JSON)
+    templateStr = db.Column(db.Text)
+    updateMessage = db.Column(db.Text)
     updater = db.Column(db.String(255))
-    update_time = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    updateTime = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    # New field: Generate Question Format
+    generateQuestionFormat = db.Column(db.Enum(
+        'SINGLE_CHOICE', 
+        'MULTIPLE_CHOICE', 
+        'FILL_IN_THE_BLANKS', 
+        'TEXT_BASED'
+    ), nullable=False, default='SINGLE_CHOICE')
 
     def __repr__(self):
-        return f'<Template {self.template_name}>'
+        return f'<Template {self.templateName}>'
 
 
 class Generation(db.Model):
     __tablename__ = 'generation'
 
-    generation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    template_id = db.Column(db.Integer, db.ForeignKey('template.template_id'), nullable=False)
-    prompt_text = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    generationId = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    templateId = db.Column(db.Integer, db.ForeignKey('template.templateId'), nullable=False)
+    promptText = db.Column(db.Text, nullable=False)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow)
     
     # JSON assignment field containing specific keys
     assignment = db.Column(db.JSON, nullable=True)
 
-    gpt_response = db.Column(db.Text, nullable=True)
+    gptResponse = db.Column(db.Text, nullable=True)
 
     def __repr__(self):
-        return f'<Generation {self.generation_id}>'
+        return f'<Generation {self.generationId}>'
+
 
 class Question(db.Model):
     __tablename__ = 'question'
 
-    question_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    generation_id = db.Column(db.Integer, db.ForeignKey('generation.generation_id'), nullable=False)
-    question_type = db.Column(db.String(50), nullable=False)
-    question_text = db.Column(db.Text, nullable=False)
+    questionId = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    generationId = db.Column(db.Integer, db.ForeignKey('generation.generationId'), nullable=False)
+    questionType = db.Column(db.String(50), nullable=False)
+    questionText = db.Column(db.Text, nullable=False)
     version = db.Column(db.Integer, nullable=False)
-    modification_type = db.Column(db.String(255), nullable=True)
-    template_id = db.Column(db.Integer, db.ForeignKey('template.template_id'))
+    modificationType = db.Column(db.String(255), nullable=True)
+    templateId = db.Column(db.Integer, db.ForeignKey('template.templateId'))
     assignment = db.Column(db.JSON)
     updater = db.Column(db.String(255))
-    update_time = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    updateTime = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
     def __repr__(self):
-        return f'<Question {self.question_id}>'
+        return f'<Question {self.questionId}>'
 
 

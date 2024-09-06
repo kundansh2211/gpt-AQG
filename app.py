@@ -24,55 +24,55 @@ def create_template():
     data = request.json
     
     template = Template(
-        template_type=data.get('template_type'),
-        template_name=data.get('template_name'),
-        template_version=data.get('template_version', 1),
-        default_assignments=data.get('default_assignments'),
-        template_str=data.get('template_str'),
-        update_message=data.get('update_message'),
+        templateType=data.get('templateType'),
+        templateName=data.get('templateName'),
+        templateVersion=data.get('templateVersion', 1),
+        defaultAssignments=data.get('defaultAssignments'),
+        templateStr=data.get('templateStr'),
+        updateMessage=data.get('updateMessage'),
         updater=data.get('updater')
     )
     
     db.session.add(template)
     db.session.commit()
 
-    return jsonify({"message": "Template created successfully", "template_id": template.template_id}), 201
+    return jsonify({"message": "Template created successfully", "templateId": template.templateId}), 201
 
-@app.route('/api/templates/<int:template_id>', methods=['GET'])
-def get_template(template_id):
-    template = Template.query.get_or_404(template_id)
+@app.route('/api/templates/<int:templateId>', methods=['GET'])
+def get_template(templateId):
+    template = Template.query.get_or_404(templateId)
     return jsonify({
-        "template_id": template.template_id,
-        "template_type": template.template_type,
-        "template_name": template.template_name,
-        "template_version": template.template_version,
-        "default_assignments": template.default_assignments,
-        "template_str": template.template_str,
-        "update_message": template.update_message,
+        "templateId": template.templateId,
+        "templateType": template.templateType,
+        "templateName": template.templateName,
+        "templateVersion": template.templateVersion,
+        "defaultAssignments": template.defaultAssignments,
+        "templateStr": template.templateStr,
+        "updateMessage": template.updateMessage,
         "updater": template.updater,
-        "updated_time": template.update_time
+        "updatedTime": template.updateTime
     }), 200
 
-@app.route('/api/templates/<int:template_id>', methods=['PUT'])
-def update_template(template_id):
-    template = Template.query.get_or_404(template_id)
+@app.route('/api/templates/<int:templateId>', methods=['PUT'])
+def update_template(templateId):
+    template = Template.query.get_or_404(templateId)
     data = request.json
     
-    template.template_type = data.get('template_type', template.template_type)
-    template.template_name = data.get('template_name', template.template_name)
-    template.template_version = data.get('template_version', template.template_version)
-    template.default_assignments = data.get('default_assignments', template.default_assignments)
-    template.template_str = data.get('template_str', template.template_str)
-    template.update_message = data.get('update_message', template.update_message)
+    template.templateType = data.get('templateType', template.templateType)
+    template.templateName = data.get('templateName', template.templateName)
+    template.templateVersion = data.get('templateVersion', template.templateVersion)
+    template.defaultAssignments = data.get('defaultAssignments', template.defaultAssignments)
+    template.templateStr = data.get('templateStr', template.templateStr)
+    template.updateMessage = data.get('updateMessage', template.updateMessage)
     template.updater = data.get('updater', template.updater)
     
     db.session.commit()
 
     return jsonify({"message": "Template updated successfully"}), 200
 
-@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
-def delete_template(template_id):
-    template = Template.query.get_or_404(template_id)
+@app.route('/api/templates/<int:templateId>', methods=['DELETE'])
+def delete_template(templateId):
+    template = Template.query.get_or_404(templateId)
     
     db.session.delete(template)
     db.session.commit()
@@ -86,15 +86,15 @@ def list_templates():
     
     for template in templates:
         templates_list.append({
-            "template_id": template.template_id,
-            "template_type": template.template_type,
-            "template_name": template.template_name,
-            "template_version": template.template_version,
-            "default_assignments": template.default_assignments,
-            "template_str": template.template_str,
-            "update_message": template.update_message,
+            "templateId": template.templateId,
+            "templateType": template.templateType,
+            "templateName": template.templateName,
+            "templateVersion": template.templateVersion,
+            "defaultAssignments": template.defaultAssignments,
+            "templateStr": template.templateStr,
+            "updateMessage": template.updateMessage,
             "updater": template.updater,
-            "updated_time": template.update_time
+            "updatedTime": template.updateTime
         })
     
     return jsonify(templates_list), 200
@@ -103,27 +103,27 @@ def list_templates():
 @app.route('/api/generation_api', methods=['POST'])
 def generation_api():
     data = request.json
-    template_id = data.get('template_id')
-    template = Template.query.get_or_404(template_id)
-    prompt_text = template.template_str
+    templateId = data.get('templateId')
+    template = Template.query.get_or_404(templateId)
+    promptText = template.templateStr
 
-    # print(f"Prompt text: {prompt_text}")  
-    # course = data.get('course')
     assignment = data.get('assignment')
-    # section_content = get_stex_content(assignment['section']['archive'], assignment['section']['filepath'])
-    final_prompt = replace_placeholders(prompt_text, assignment)
+    
+    final_prompt = replace_placeholders(promptText, assignment)
     print("Final prompt sent to GPT: ", final_prompt)
     gpt_response = generate_gpt_response(final_prompt)
+    
     generation = Generation(
-        template_id=template_id,
-        prompt_text=prompt_text,
+        templateId=templateId,
+        promptText=promptText,
         assignment=assignment,  
-        gpt_response=gpt_response,
-        created_at=datetime.utcnow()
+        gptResponse=gpt_response,
+        createdAt=datetime.utcnow()
     )
 
     db.session.add(generation)
     db.session.commit()
+    
     return jsonify({
         "message": "Generation created successfully",
         "gpt_response": gpt_response
