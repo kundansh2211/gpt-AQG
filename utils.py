@@ -7,13 +7,13 @@ load_dotenv()
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  
-def generate_gpt_response(final_prompt):
+def generate_gptResponse(finalPrompt):
     # Create a chat completion request
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": final_prompt}
+            {"role": "user", "content": finalPrompt}
         ]
     )
     
