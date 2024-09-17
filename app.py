@@ -7,18 +7,40 @@ from flask_migrate import Migrate
 from models import Template, Generation, Question
 from dotenv import load_dotenv
 from datetime import datetime
-from utils import generate_gptResponse
+from utils import generate_gptResponse,lastTextGenerationApi,process_questions,finalPromptAddReferences,finalPromptFixDistractors,finalPromptRemoveAmbiguity
+from sqlalchemy import desc
+
 import json
 import os
 import re
 
 app = Flask(__name__)
 CORS(app)
+
 app.config.from_object(Config)
 
 db.init_app(app)
 migrate = Migrate(app, db)
 load_dotenv()
+
+
+
+
+@app.route('/api/templates/check', methods=['GET'])
+def check_template_exists():
+    templateName = request.args.get('name')
+    existingTemplate = Template.query.filter_by(templateName=templateName) \
+                                     .order_by(desc(Template.templateVersion)) \
+                                     .first()
+    if existingTemplate:
+        return jsonify({
+            'exists': True,
+            'templateId': existingTemplate.templateId,
+            'templateVersion': existingTemplate.templateVersion
+        })
+    else:
+        return jsonify({'exists': False})
+    
 
 
 @app.route('/api/templates', methods=['POST'])
@@ -32,13 +54,15 @@ def create_template():
         templateStr=data.get('templateStr'),
         updateMessage=data.get('updateMessage'),
         updater=data.get('updater'),
-        gptResponseFormat=data.get('selectedFormat')
+        gptResponseFormat=data.get('selectedResponseFormat'),
+
     )
     
     db.session.add(template)
     db.session.commit()
 
     return jsonify({"message": "Template created successfully", "templateId": template.templateId}), 201
+
 
 
 
@@ -74,7 +98,7 @@ def update_template(templateId):
     
     db.session.commit()
 
-    return jsonify({"message": "Template updated successfully"}), 200
+    return jsonify({"message": "Template updated successfully","templateVersion":template.templateVersion}), 200
 
 
 
@@ -123,24 +147,23 @@ def generation_api():
     mergedPromptText = ' '.join(promptTexts)
     gptResponseFormat= template.gptResponseFormat    
     assignment = data.get('assignments')
-    last=f'''. Add values from assignments for specific key in whole prompt at place of placeholders and if no
-    placeholder for specific key is availale in prompt then use informations used in prompts and assignments
-    to generate question and also accordin to value of gptResponseFormat i.e. if JSON then Format the output as JSON , if value is LATEX_FORMAT then format the output as LATEX with
-    the following fields:
-    - `id`: Unique identifier
-    - `question`: The question text
-    - `type`: The type of question (e.g., "single-correct")
-    - `options`: A list of possible answers
-    - `correctAnswer`: The correct answer
-    Ensure that output is correctly formatted and Do not include any other text or explanation.Even if you 
-    require any other information or want to explain in better ways still donot return other texts than the prescribed
-    format. You should however return empty json if you donot understand anything at all from prompt or assignments  . 
-    Return json output starting with ### and ending with ###. Everytime json or latex output should be inside an array even 
-    if it is empty or only value inside it.Question should be somewhat like having meaning not irrelevant and if no excess
-    information then just return empty json or latex '''
-
+    section_value=None
+    section_content=""
+    for item in assignment:
+        if item.get('key') == 'SECTION_STEX' or item.get('key') == 'SECTION_TIDY_STEX':
+            section_value = item.get('value')
+            break  
+    # archieve and filepath receieved as 'archive||filepath' in section_value
+    if section_value and '||' in section_value:
+        archive, filepath = section_value.split('||')
     
+        section_content = get_stex_content(archive, filepath)
+    else:
+        print("Invalid section format or no section value provided")
+
+    last = lastTextGenerationApi(section_content)
     finalPrompt=mergedPromptText+". assignment: "+str(assignment)+", gptResponseFormat: "+gptResponseFormat +last
+    # gptResponse="###[{asdfasdfasdf}]###"
     gptResponse = generate_gptResponse(finalPrompt)
     generation = Generation(
         templateId=templateId,
@@ -168,9 +191,6 @@ def generation_api():
 
     return jsonify({
         "message": "Generation created successfully",
-        "gptResponse": gptResponse,
-        "generationId":generationId,
-        "createdAt":createdAt,
         "generationObj":generationObj
     }), 201
 
@@ -205,6 +225,59 @@ def get_generations_by_templateType():
 
 
 
+# @app.route('/api/question_extraction', methods=['POST'])
+# def question_extraction_api():
+#     try:
+#         data = request.json
+#         generationObj = data.get('generationObj')
+
+#         if isinstance(generationObj, str):
+#             generationObj = json.loads(generationObj)
+
+#         generationId = generationObj.get('generationId')
+#         modificationType = generationObj.get('modificationType', None)
+        
+#         generation = Generation.query.get(generationId)
+#         if not generation:
+#             return jsonify({
+#                 "message": f"Generation record with ID {generationId} not found."
+#             }), 404
+
+#         extractedJson = data.get('extractedJson', [])
+#         if not isinstance(extractedJson, list):
+#             extractedJson = [extractedJson]        
+#             return jsonify({
+#                 "message": "Invalid extractedJson format. Expected a list of questions."
+#             }), 400
+        
+#         questions = process_questions(extractedJson, generation, modificationType)
+        
+#         if not questions:
+#             return jsonify({
+#                 "message": "No valid questions extracted from the extractedJson."
+#             }), 400
+        
+#         try:
+#             db.session.bulk_save_objects(questions)
+#             db.session.commit()
+
+#         except Exception as e:
+#             db.session.rollback()
+#             return jsonify({
+#                 "message": "An error occurred while saving questions to the database."
+#             }), 500
+        
+#         return jsonify({
+#             "message": f"{len(questions)} questions extracted and saved successfully.",
+#             "questions_saved": len(questions),
+#             "generationId": generationId
+#         }), 201
+
+#     except Exception as e:
+#         return jsonify({
+#             "message": "An unexpected error occurred."
+#         }), 500
+
 @app.route('/api/question_extraction', methods=['POST'])
 def question_extraction_api():
     try:
@@ -213,8 +286,10 @@ def question_extraction_api():
 
         if isinstance(generationObj, str):
             generationObj = json.loads(generationObj)
+
         generationId = generationObj.get('generationId')
         modificationType = generationObj.get('modificationType', None)
+        
         
         generation = Generation.query.get(generationId)
         if not generation:
@@ -225,48 +300,9 @@ def question_extraction_api():
         extractedJson = data.get('extractedJson', [])
         if not isinstance(extractedJson, list):
             extractedJson = [extractedJson]        
-        if not isinstance(extractedJson, list):
-            return jsonify({
-                "message": "Invalid extractedJson format. Expected a list of questions."
-            }), 400
+            
         
-        questions = []
-        for questionData in extractedJson:
-            complete_question = {
-                "id": questionData.get('id'),
-                "question": questionData.get('question'),
-                "type": questionData.get('type'),
-                "correctAnswer": questionData.get('correctAnswer', ''),
-                "options": questionData.get('options', [])
-            }
-            questionId = questionData.get('id')
-            questionText = json.dumps(complete_question)
-            questionType = questionData.get('type')
-            templateId = generation.templateId
-            assignment = generation.assignment
-            existing_question = Question.query.filter_by(questionId=questionId, generationId=generationId).order_by(Question.version.desc()).first()
-
-            if existing_question:
-                newVersion = existing_question.version + 1
-            else:
-                newVersion = 1
-            
-            if not questionText or not questionType or not questionId:
-                continue
-            
-            question = Question(
-                questionId=questionId,
-                generationId=generationId,
-                questionType=questionType,
-                questionText=questionText,
-                version=newVersion,
-                modificationType=modificationType,
-                templateId=templateId,
-                assignment=assignment,
-                updater="Abhishek",
-                updateTime=datetime.now()
-            )
-            questions.append(question)
+        questions = process_questions(extractedJson, generation, modificationType)
         
         if not questions:
             return jsonify({
@@ -299,6 +335,7 @@ def question_extraction_api():
 
 
 
+
 @app.route('/api/get_all_versions', methods=['POST'])
 def get_all_versions():
     try:
@@ -310,16 +347,15 @@ def get_all_versions():
             }), 400
         
         questions = Question.query.filter_by(generationId=generationId).all()
-        print(" eut",questions)
         
         if not questions:
             return jsonify({
                 "message": f"No questions found for generationId {generationId}"
             }), 404
         
-        responseData = []
+        questionData = []
         for question in questions:
-            responseData.append({
+            questionData.append({
                 "id": question.questionId,
                 "question": question.questionText,
                 "type": question.questionType,
@@ -333,7 +369,7 @@ def get_all_versions():
         return jsonify({
             "message": "Questions retrieved successfully",
             "generationId": generationId,
-            "questions": responseData
+            "questions": questionData
         }), 200
 
     except Exception as e:
@@ -345,10 +381,10 @@ def get_all_versions():
 @app.route('/api/add-references', methods=['POST'])
 def add_references():
     data = request.json    
-    current_problem = data.get('currentProblem')
+    currentProblem = data.get('currentProblem')
     generationId = data.get('generationId')
 
-    if not current_problem or not generationId:
+    if not currentProblem or not generationId:
         return jsonify({"error": "Both currentProblem and generationid are required"}), 400
     
     try:
@@ -358,20 +394,7 @@ def add_references():
     templateId=generations.templateId
     assignment=generations.assignment
  
-    finalPrompt = f'''You have previously generated a set of problems. Now, I will provide a specific problem from that set, and your task is to focus only on this specific problem. Your task is to:
-Add any relevant references or additional information to enhance the problem's clarity.
-For example, if the problem mentions a function that hasn't been defined, include its definition within the problem.
-Ensure that any referenced concepts, terms, or functions are clearly explained within the problem itself.
-If no references or additional information are needed to clarify the problem, add a reference to where the problem or information is taken from (e.g., a book, paper, or source of information).
-Important:
-
-Do not modify any other parts of the problem or its format.
-Do not add any extra text or new fields (such as "references"). Embed any additional information directly into the problem where appropriate.
-Maintain the original structure of the problem as much as possible.
-Return the problem in the JSON format with all keys and values enclosed in double quotes , and enclose the entire updated content within ### and ###.
-
-The specific problem you need to update is: {current_problem}.
-'''
+    finalPrompt = finalPromptAddReferences(currentProblem)
 
     updatedGptResponse = generate_gptResponse(finalPrompt)
    
@@ -400,39 +423,23 @@ The specific problem you need to update is: {current_problem}.
 @app.route('/api/fix-distractors', methods=['POST'])
 def fix_distractors():
     data = request.json
-    current_problem = data.get('currentProblem')
+    currentProblem = data.get('currentProblem')
     generationId = data.get('generationId')
-    if not current_problem or not generationId:
+    if not currentProblem or not generationId:
         return jsonify({"error": "Both currentProblem and generationId are required"}), 400
 
     try:
-        generations = Question.query.filter_by(generationId=generationId).first_or_404()
+        generation = Question.query.filter_by(generationId=generationId).first_or_404()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    templateId=generations.templateId
-    assignment=generations.assignment
+    templateId=generation.templateId
+    assignment=generation.assignment
     
-    finalPrompt = f'''You have previously generated a set of problems. Now, I will provide a specific problem from that set, and your task is to focus only on this specific problem. Your task is to:
-
-    - Fix the distractors in the options list to ensure they are:
-        - Similar in nature and closely related to the topic of the question.
-        - Relevant and plausible enough to be considered as distractors.
-        - Clear and non-ambiguous.
-    - Ensure that the corrected options are still related to the topic of the question.
-
-    Important:
-    - Do not modify any other parts of the response aside from the provided problem.
-    - Do not add any extra text, explanations, or new fields. Directly update the distractors within the problem where appropriate.
-    -Maintain the original structure of the problem as much as possible.
-Return the problem in the JSON format with all keys and values enclosed in double quotes , and enclose the entire updated content within ### and ###.
-
-The specific problem you need to update is: {current_problem}.
-    '''
+    finalPrompt = finalPromptFixDistractors(currentProblem)
 
     updatedGptResponse = generate_gptResponse(finalPrompt)
     
 
-    generationId = generations.generationId
     generationObj = {
         "generationId": generationId,
         "templateId": templateId,
@@ -440,13 +447,12 @@ The specific problem you need to update is: {current_problem}.
         "createdAt": datetime.now(),
         "promptStr":finalPrompt,
         "assignments":assignment,
-        "modificationType":"Fixed Distractor "
+        "modificationType":"Fixed Distractor"
         
     } 
 
-    print("genOb",generationObj)
     return jsonify({
-        "message": "References added successfully",
+        "message": "Distractors fixed successfully",
         "updatedGptResponse": updatedGptResponse,
         "generationObj":generationObj
         
@@ -459,40 +465,23 @@ The specific problem you need to update is: {current_problem}.
 @app.route('/api/remove-ambiguity', methods=['POST'])
 def remove_ambiguity():
     data = request.json    
-    current_problem = data.get('currentProblem')
+    currentProblem = data.get('currentProblem')
     generationId = data.get('generationId')
     
-    if not current_problem or not generationId:
+    if not currentProblem or not generationId:
         return jsonify({"error": "Both currentProblem and gptResponse are required"}), 400
 
     try:
-        generations = Question.query.filter_by(generationId=generationId).first_or_404()
+        generation = Question.query.filter_by(generationId=generationId).first_or_404()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    templateId=generations.templateId
-    assignment=generations.assignment
+    templateId=generation.templateId
+    assignment=generation.assignment
 
    
-    finalPrompt = f'''You have previously generated a set of problems. Now, I will provide a specific problem from that set, and your task is to focus only on this specific problem. Your task is to:
-
-    - Remove any ambiguity in the question and options list to ensure that:
-        - The question is clear, concise, and unambiguous.
-        - All options are distinct, clear, and don't overlap in meaning.
-        - There is no confusion in the interpretation of any option.
-        - Ensure all options are closely related to the question but differ in plausible ways.
-    - Ensure that the corrected problem maintains its original intent and educational value.
-
-    Important:
-    - Do not modify any other parts of the response aside from the provided problem.
-    - Ensure the response remains concise, avoiding unnecessary additions.
-     -Maintain the original structure of the problem as much as possible.
-Return the problem in the JSON format with all keys and values enclosed in double quotes , and enclose the entire updated content within ### and ###.
-
-The specific problem you need to update is: {current_problem}.
-    '''
+    finalPrompt = finalPromptRemoveAmbiguity(currentProblem)
     updatedGptResponse = generate_gptResponse(finalPrompt)
 
-    generationId = generations.generationId
     generationObj = {
         "generationId": generationId,
         "templateId": templateId,
@@ -505,7 +494,7 @@ The specific problem you need to update is: {current_problem}.
     } 
 
     return jsonify({
-        "message": "References added successfully",
+        "message": "Ambiguity removed successfully",
         "updatedGptResponse": updatedGptResponse,
         "generationObj":generationObj
         
