@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-from fetchers import get_stex_content , get_recursive_stex 
 from flask_cors import CORS
 from db import db
 from config import Config

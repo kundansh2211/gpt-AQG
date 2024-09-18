@@ -180,3 +180,4 @@ if __name__ == "__main__":
     # Example of recursive fetching
     # content = get_recursive_stex(archive="courses/FAU/IWGS/course", filename="course/notes/notes-part1.tex")
     # print(content)
+ 
