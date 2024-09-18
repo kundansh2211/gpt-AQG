@@ -1,5 +1,3 @@
-import openai
-from dotenv import load_dotenv
 import os
 from openai import OpenAI
 from fetchers import get_stex_content
