@@ -1,4 +1,5 @@
 from datetime import datetime
+from db import db
 
 class Template(db.Model):
     __tablename__ = 'template'
