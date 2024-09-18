@@ -4,10 +4,10 @@ from flask_cors import CORS
 from db import db
 from config import Config
 from flask_migrate import Migrate
-from models import Template, Generation, Question
+from models import Template, Generation, Question,Prompt
 from dotenv import load_dotenv
 from datetime import datetime
-from utils import generate_gptResponse,lastTextGenerationApi,process_questions,finalPromptAddReferences,finalPromptFixDistractors,finalPromptRemoveAmbiguity
+from utils import generate_gptResponse,process_questions
 from sqlalchemy import desc
 
 import json
@@ -161,9 +161,7 @@ def generation_api():
     else:
         print("Invalid section format or no section value provided")
 
-    last = lastTextGenerationApi(section_content)
-    finalPrompt=mergedPromptText+". assignment: "+str(assignment)+", gptResponseFormat: "+gptResponseFormat +last
-    # gptResponse="###[{asdfasdfasdf}]###"
+    finalPrompt=mergedPromptText+". assignment: "+str(assignment)+", gptResponseFormat: "+gptResponseFormat + "section_content : "+section_content
     gptResponse = generate_gptResponse(finalPrompt)
     generation = Generation(
         templateId=templateId,
@@ -225,58 +223,6 @@ def get_generations_by_templateType():
 
 
 
-# @app.route('/api/question_extraction', methods=['POST'])
-# def question_extraction_api():
-#     try:
-#         data = request.json
-#         generationObj = data.get('generationObj')
-
-#         if isinstance(generationObj, str):
-#             generationObj = json.loads(generationObj)
-
-#         generationId = generationObj.get('generationId')
-#         modificationType = generationObj.get('modificationType', None)
-        
-#         generation = Generation.query.get(generationId)
-#         if not generation:
-#             return jsonify({
-#                 "message": f"Generation record with ID {generationId} not found."
-#             }), 404
-
-#         extractedJson = data.get('extractedJson', [])
-#         if not isinstance(extractedJson, list):
-#             extractedJson = [extractedJson]        
-#             return jsonify({
-#                 "message": "Invalid extractedJson format. Expected a list of questions."
-#             }), 400
-        
-#         questions = process_questions(extractedJson, generation, modificationType)
-        
-#         if not questions:
-#             return jsonify({
-#                 "message": "No valid questions extracted from the extractedJson."
-#             }), 400
-        
-#         try:
-#             db.session.bulk_save_objects(questions)
-#             db.session.commit()
-
-#         except Exception as e:
-#             db.session.rollback()
-#             return jsonify({
-#                 "message": "An error occurred while saving questions to the database."
-#             }), 500
-        
-#         return jsonify({
-#             "message": f"{len(questions)} questions extracted and saved successfully.",
-#             "questions_saved": len(questions),
-#             "generationId": generationId
-#         }), 201
-
-#     except Exception as e:
-#         return jsonify({
-#             "message": "An unexpected error occurred."
-#         }), 500
 
 @app.route('/api/question_extraction', methods=['POST'])
 def question_extraction_api():
@@ -298,6 +244,7 @@ def question_extraction_api():
             }), 404
 
         extractedJson = data.get('extractedJson', [])
+        print("esjs",extractedJson)
         if not isinstance(extractedJson, list):
             extractedJson = [extractedJson]        
             
@@ -310,6 +257,7 @@ def question_extraction_api():
             }), 400
         
         try:
+            print("saving question to database")
             db.session.bulk_save_objects(questions)
             db.session.commit()
 
@@ -393,8 +341,22 @@ def add_references():
         return jsonify({"error": str(e)}), 500
     templateId=generations.templateId
     assignment=generations.assignment
- 
-    finalPrompt = finalPromptAddReferences(currentProblem)
+    section_value=None
+    section_content=""
+    for item in assignment:
+        if item.get('key') == 'SECTION_STEX' or item.get('key') == 'SECTION_TIDY_STEX':
+            section_value = item.get('value')
+            break  
+    # archieve and filepath receieved as 'archive||filepath' in section_value
+    if section_value and '||' in section_value:
+        archive, filepath = section_value.split('||')
+    
+        section_content = get_stex_content(archive, filepath)
+    else:
+        print("Invalid section format or no section value provided")
+
+    result = Prompt.query.filter_by(templateType="AddReferences").first_or_404()
+    finalPrompt = result.promptText + "section_content"+section_content+"currentProblem:"+currentProblem
 
     updatedGptResponse = generate_gptResponse(finalPrompt)
    
@@ -434,8 +396,23 @@ def fix_distractors():
         return jsonify({"error": str(e)}), 500
     templateId=generation.templateId
     assignment=generation.assignment
+    section_value=None
+    section_content=""
+    for item in assignment:
+        if item.get('key') == 'SECTION_STEX' or item.get('key') == 'SECTION_TIDY_STEX':
+            section_value = item.get('value')
+            break  
+    # archieve and filepath receieved as 'archive||filepath' in section_value
+    if section_value and '||' in section_value:
+        archive, filepath = section_value.split('||')
     
-    finalPrompt = finalPromptFixDistractors(currentProblem)
+        section_content = get_stex_content(archive, filepath)
+    else:
+        print("Invalid section format or no section value provided")
+
+    result = Prompt.query.filter_by(templateType="FixDistractors").first_or_404()
+    finalPrompt = result.promptText + "section_content"+section_content+"currentProblem:"+currentProblem
+
 
     updatedGptResponse = generate_gptResponse(finalPrompt)
     
@@ -477,9 +454,23 @@ def remove_ambiguity():
         return jsonify({"error": str(e)}), 500
     templateId=generation.templateId
     assignment=generation.assignment
+    section_value=None
+    section_content=""
+    for item in assignment:
+        if item.get('key') == 'SECTION_STEX' or item.get('key') == 'SECTION_TIDY_STEX':
+            section_value = item.get('value')
+            break  
+    # archieve and filepath receieved as 'archive||filepath' in section_value
+    if section_value and '||' in section_value:
+        archive, filepath = section_value.split('||')
+    
+        section_content = get_stex_content(archive, filepath)
+    else:
+        print("Invalid section format or no section value provided")
 
+    result = Prompt.query.filter_by(templateType="RemoveAmbiguity").first_or_404()
+    finalPrompt = result.promptText + "section_content"+section_content+"currentProblem:"+currentProblem
    
-    finalPrompt = finalPromptRemoveAmbiguity(currentProblem)
     updatedGptResponse = generate_gptResponse(finalPrompt)
 
     generationObj = {

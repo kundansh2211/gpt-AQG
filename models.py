@@ -63,6 +63,15 @@ class Question(db.Model):
     updateTime = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
    
-
     def __repr__(self):
         return f'<Question {self.generationId}, {self.questionId}, {self.version}>'
+
+class Prompt(db.Model):
+    __tablename__ = 'prompt'
+
+    id = db.Column(db.Integer, primary_key=True)
+    templateType = db.Column(db.String(50), nullable=False)
+    promptText = db.Column(db.Text, nullable=False)
+
+    def __repr__(self):
+        return f'<Prompt {self.templateType}, {self.promptText}>'
