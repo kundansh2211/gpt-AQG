@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+from flask import Flask, json, request, jsonify
+import requests
 from flask_cors import CORS
 from db import db
 from config import Config
@@ -6,6 +7,8 @@ from flask_migrate import Migrate
 from models import Template, Generation, Question
 from dotenv import load_dotenv
 from datetime import datetime
+from prompts import QUIZ_GENERATION_PROMPT
+from urllib.parse import quote
 from utils import generate_gpt_response, replace_placeholders
 import os
 
@@ -129,5 +132,49 @@ def generation_api():
     }), 201
 
 
+@app.route('/api/generate-quiz-problems', methods=['POST'])
+def generate_quiz_problems():
+    data = request.json
+    courseId = data.get('courseId')
+    sectionId = data.get('sectionId')
+    sectionUri = data.get('sectionUri')
+    encoded_section_uri = quote(sectionUri, safe='') 
+
+    if not courseId or not sectionId or not sectionUri:
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    try:
+        slides_resp = requests.get(
+            f"{os.getenv('BASE_SLIDES_DATA_URL')}/api/get-slides",
+            params={"courseId": courseId, "sectionIds": sectionId}
+        )
+        slides_resp.raise_for_status()
+        slides_data = slides_resp.json()
+
+        problems_resp = requests.get(
+            f"{os.getenv('BASE_SLIDES_DATA_URL')}/api/get-problems-by-section?sectionUri={encoded_section_uri}"
+        )
+        problems_resp.raise_for_status()
+        problem_uris = problems_resp.json() 
+        problem_contents = []
+        for uri in problem_uris[:5]:     #for now only upto 5 uris are being sent for reference
+            prob_resp = requests.get(uri)
+            if prob_resp.status_code == 200:
+                try:
+                     problem_contents.append(prob_resp)
+                except Exception as e:
+                     print(f"Failed to parse HTML from {uri}: {e}")
+        final_prompt = QUIZ_GENERATION_PROMPT.format(
+                       slides_data=slides_data,
+                       problem_contents=problem_contents
+                      )
+        
+        gpt_response = generate_gpt_response(final_prompt)  
+        quiz_data = json.loads(gpt_response)
+        return jsonify({"quiz": quiz_data})
+       
+    except Exception as e:
+        print("Error during quiz generation:", str(e))
+        return jsonify({"error": "Failed to generate quiz problems", "details": str(e)}), 500
 if __name__ == '__main__':
     app.run(debug=True)
